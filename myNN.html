@@ -7,7 +7,7 @@
 	<script type="text/javascript">
 	
 ##NN data##
-	const canCheckPrediction = (typeof trainingOutputs != 'undefined')
+	const canCheckPrediction = ((typeof trainingInputs != 'undefined') && (typeof trainingOutputs != 'undefined'));
 	const trainingFileName = "##N##";
 	var numIOs, fName, displayFileName = "", dataWarning = false, wrapTo = 0;
 	var language, precision, precisionIdx, showInputs, writeHeaders, Ctype, separator=",";
@@ -23,9 +23,9 @@
 	const Ctypes = [ "float", "double" ];
 	const rowcolNames = [ "row", "column" ];
 	const tab1 = "    ";
-	const doExample = (exampleTestData.length > 0);
+	const doExample = (testData.length > 0);
 	
-	function grand()  {  return Math.sqrt(-2.*Math.log(1.-Math.random())) * Math.cos(2.*Math.PI*Math.random())  }
+	function grand()  {  return Math.sqrt(-2.*Math.log(1.-Math.random())) * Math.cos(2.*Math.PI*Math.random());  }
 	
 	
 	function arrayStr(arr, printPrecision, arrayWidth, rowSeparator, initFromLeft, nextLineIndent, lineBreakChar, appendF)
@@ -70,9 +70,9 @@
 		const tab2 = tab1+tab1, tab3 = tab2+tab1, tab4 = tab3+tab1;
 		
 		const varInputStr = {
-			C:  function()  {  return Ctype + " *"  },
-			Java:  function()  {  return Ctype + "[] "  },
-			JS:  function()  {  return ""  },
+			C:  function()  {  return Ctype + " *";  },
+			Java:  function()  {  return Ctype + "[] ";  },
+			JS:  function()  {  return "";  },
 			MAT:  function()  {  return "";  },
 			Py:  function()  {  return "";  },
 			R:  function()  {  return "";  }
@@ -127,28 +127,37 @@
 		const initLayerDef = {
 			
 			C:  function()  {
-					if (!hasBias)  return "void clearLayer(" + Ctype + " *l, const int n)  {" +
+					var lInitFunctions = "";
+					if ((!hasBias) || (sparseWeights))  lInitFunctions = "void clearLayer(" + Ctype + " *l, const int n)  {" +
 						"  memset(l, 0, n*sizeof(" + Ctype + "));  }\n\n";
-					else if (!sparseWeights)  return "void setLayer(" + Ctype + " *l, const " + Ctype + " *b, const int n)  {" +
-						"  memcpy(l, b, n*sizeof(" + Ctype + "));  }\n\n";
-					else  return "void setLayer(" + Ctype + " *l, const int *bi, const " + Ctype + " *b, const int n, const int nb)\n{\n" +
-						"    int i;\n\n    memset(l, 0, n*sizeof(" + Ctype + "));\n" +
-						"    for (i = 0; i < nb; i++)  l[bi[i]] = b[i];\n}\n\n";  },
+					if (hasBias)  {
+						if (!sparseWeights)  lInitFunctions = "void setLayer(" + Ctype + " *l, const " + Ctype + " *b, const int n)  {" +
+							"  memcpy(l, b, n*sizeof(" + Ctype + "));  }\n\n";
+						else  lInitFunctions += "void setLayer(" + Ctype + " *l, const int *bi, const " + Ctype + " *b, const int n, const int nb)\n{\n" +
+							"    int i;\n\n    memset(l, 0, n*sizeof(" + Ctype + "));\n" +
+							"    for (i = 0; i < nb; i++)  l[bi[i]] = b[i];\n}\n\n";		}
+					return lInitFunctions;			},
 			
 			Java:  function()  {
-					if (!hasBias)  return "private void clearLayer(" + Ctype + "[] l)  {  Arrays.fill(l, 0);  }\n\n";
-					else if (!sparseWeights)  return "private void setLayer(" + Ctype + "[] l, " + Ctype +
-						"[] b)  {  System.arraycopy(b, 0, l, 0, l.length);  }\n\n";
-					else  return "private void setLayer(" + Ctype + "[] l, int[] bi, " + Ctype + "[] b)\n" + tab1 + "{\n" +
-						tab2 + "int i;\n" + tab2 + "Arrays.fill(l, 0);\n" + tab2 +
-						"for (i = 0; i < b.length; i++)  l[bi[i]] = b[i];\n" + tab1 + "}\n\n";  },
+					var lInitFunctions = "";
+					if ((!hasBias) || (sparseWeights))  lInitFunctions = "private void clearLayer(" + Ctype + "[] l)  {  Arrays.fill(l, 0);  }\n\n";
+					if (hasBias)  {
+						if (!sparseWeights)  lInitFunctions = "private void setLayer(" + Ctype + "[] l, " + Ctype +
+							"[] b)  {  System.arraycopy(b, 0, l, 0, l.length);  }\n\n";
+						else  lInitFunctions += "private void setLayer(" + Ctype + "[] l, int[] bi, " + Ctype + "[] b)\n" + tab1 + "{\n" +
+							tab2 + "int i;\n" + tab2 + "Arrays.fill(l, 0);\n" + tab2 +
+							"for (i = 0; i < b.length; i++)  l[bi[i]] = b[i];\n" + tab1 + "}\n\n";		}
+						return lInitFunctions;			},
 			
 			JS:  function()  {
-					if (!hasBias)  return "function clearLayer(l)  {  for (var i = 0; i < l.length; i++)  l[i] = 0;  }\n\n";
-					else if (!sparseWeights)  return "function setLayer(l, b)  {  for (var i = 0; i < l.length; i++)  l[i] = b[i];  }\n\n";
-					else  return "function setLayer(l, bi, b)\n" + tab1 + "{\n" + tab2 +
-							"for (var i = 0; i < l.length; i++)  l[i] = 0;\n" + tab2 +
-							"for (var i = 0; i < b.length; i++)  l[bi[i]] = b[i];\n" + tab1 + "}\n\n";  },
+					var lInitFunctions = "";
+					if ((!hasBias) || (sparseWeights))  lInitFunctions = "function clearLayer(l)  {  for (var i = 0; i < l.length; i++)  l[i] = 0;  }\n\n";
+					if (hasBias)  {
+						if (!sparseWeights)  lInitFunctions = "function setLayer(l, b)  {  for (var i = 0; i < l.length; i++)  l[i] = b[i];  }\n\n";
+						else  lInitFunctions += "function setLayer(l, bi, b)\n" + tab1 + "{\n" + tab2 +
+								"for (var i = 0; i < l.length; i++)  l[i] = 0;\n" + tab2 +
+								"for (var i = 0; i < b.length; i++)  l[bi[i]] = b[i];\n" + tab1 + "}\n\n";		}
+					return lInitFunctions;			},
 			
 			MAT:  function()  {  return "";  },
 			Py:  function()  {  return "";  },
@@ -303,7 +312,7 @@
 					if (sparseWeights)  {
 						if (!hasBias)  swFunctions = tab2 + "function v2 = clearLayer(n)\n" +
 										tab3 + "v2 = zeros(1, n);\n" + tab2 + "end\n\n";
-						else  swFunctions = tab2 + "function v2 = setLayer(idx, b, n)\n" +
+						if (hasBias)  swFunctions += tab2 + "function v2 = setLayer(idx, b, n)\n" +
 										tab3 + "v2 = zeros(1, n);\n" + tab3 + "for i = 1:length(b)\n" +
 												tab4 + "v2(idx(i)+1) = b(i);\n" + tab3 + "end\n" + tab2 + "end\n\n";
 						swFunctions += tab2 + "function l = addToLayer(l, l0, n0, nf, w)\n" +
@@ -317,8 +326,8 @@
 			Py:  function(dummy, varInsDef, fDefs)  {
 					var swFunctions = "";
 					if (sparseWeights)  {
-						if (!hasBias)  swFunctions = tab2 + "def clearLayer(n):\n" + tab3 + "return [0] * n\n\n";
-						else swFunctions = tab2 + "def setLayer(idx, b, n):\n" +
+						swFunctions = tab2 + "def clearLayer(n):\n" + tab3 + "return [0] * n\n\n";
+						if (hasBias)  swFunctions += tab2 + "def setLayer(idx, b, n):\n" +
 										tab3 + "v2 = [0] * n\n" + tab3 + "for i in range(len(b)):\n" +
 												tab4 + "v2[idx[i]] = b[i]\n" + tab3 + "return v2\n\n";
 						swFunctions += tab2 + "def addToLayer(l, l0, n0, nf, w):\n" +
@@ -329,9 +338,9 @@
 			R:  function(dummy, varInsDef)  {
 					var swFunctions = "";
 					if (sparseWeights)  {
-						if (!hasBias)  swFunctions = tab1 + "clearLayer <- function(n)\n" + tab1 + "{\n" +
+						swFunctions = tab1 + "clearLayer <- function(n)\n" + tab1 + "{\n" +
 										tab2 + "return(numeric(n))\n" + tab1 + "}\n\n";
-						else swFunctions = tab1 + "setLayer <- function(idx, b, n)\n" + tab1 + "{\n" +
+						if (hasBias)  swFunctions += tab1 + "setLayer <- function(idx, b, n)\n" + tab1 + "{\n" +
 										tab2 + "v2 <- numeric(n)\n" + tab2 + "for (i in 1:length(b))  {\n" +
 												tab3 + "v2[idx[i]+1] = b[i]\n" + tab2 + "}\n" + tab2 + "return(v2)\n" + tab1 + "}\n\n";
 						swFunctions += tab1 + "addToLayer <- function(l, l0, n0, nf, w)\n" + tab1 + "{\n" +
@@ -481,7 +490,7 @@
 		}
 		
 		let fDefs = "";
-		for (cAF = 0; cAF < numAFs; cAF++)  {
+		for (cAF = 1; cAF < numAFs; cAF++)  {
 		if (hasAF[cAF])  {
 			fDefs += AFfunctions[NNlanguage](cAF);
 		}}
@@ -531,18 +540,19 @@
 			}
 		}}
 		
-		let firstInputLayer = 0;
-		if (hasBias)  firstInputLayer = 1;
 		rtrn += methodDef[NNlanguage](initLayerStr, varInsDef, fDefs)
 		 
 		for (cl = 2; cl < numLayers; cl++)  {
 			let lName = layerName(cl);
 			let lSize = layerSize[cl];
 			let plusStr = "";
+			let firstInputLayer = 0;
+			
 			if (cl != variationalLayer)  {
-				if (!hasBias)  {
+				if (layerInputs[cl][0] != 0)  {
 					rtrn += "\n" + clearLayer[NNlanguage](lName, lSize, weightsName(0, cl, 2));	}
 				else  {
+					firstInputLayer = 1;
 					if (!sparseWeights)  rtrn += "\n" + setBias[NNlanguage](lName, lSize, weightsName(0, cl, 2));
 					else  rtrn += "\n" + setBiasSparse[NNlanguage](lName, lSize, 
 							weightsName(0, cl, 1), weightsName(0, cl, 2), weights[cl][0].length.toString());
@@ -659,7 +669,7 @@
 						else  NNvariationalInputs[cs][cn] = grand();
 			}	}	}
 			
-			if ((isAutoencoder) && (!hasEncoder) && (doExample))  {
+			if ((isDecoder) && (doExample))  {
 				if (variationalLayer == 1)  NNinputs = NNvariationalInputs;
 				else  {
 					for (var cs = 0; cs < NNinputs.length; cs++)  {
@@ -668,8 +678,10 @@
 			}	}	}}
 			
 			makeNNprediction(NNpredictor);
-		}
-		
+			
+			if ((isDecoder) && (doExample))  {
+				trueOutputs = NNoutputs;
+		}	}		
 		var NNoutputString = "";
 		if ((writeHeaders) && (rowcol == 1))  {
 			let charFromLeft = 0;
@@ -822,7 +834,7 @@
 	
 	function doUpload(UL)
 	{
-		if (doExample)  fName = "seoul_weather_test.csv";
+		if (doExample)  fName = "random_data_test.csv";
 		else  fName = UL.files[0].name;
 		displayFileName = fName;
 		writeDescription(" [processing]");
@@ -830,7 +842,7 @@
 		if (doExample)  {
 			rowHeaders = [];
 			colHeaders = IOheaders;
-			tableNums = exampleTestData;
+			tableNums = testData;
 			makePredictionFromTable();
 		}
 		else  {
@@ -841,6 +853,9 @@
 			}
 			reader.readAsText(UL.files[0]);
 		}
+		
+		initAxes();
+		drawData();
 	}
 	
 	
@@ -982,7 +997,7 @@
 					headersToWrite[Iidx[ci]] = colHeaders[ci];
 		}	}	}
 		
-		if ((!isAutoencoder) || (hasEncoder) || (!doExample))  {
+		if ((!isDecoder) || (!doExample))  {
 			if ((!tableHasSeparateTargetOuts) && (rowcol == 1))  NNinputs = tableNums;
 			else  {
 				NNinputs = [];
@@ -1097,25 +1112,40 @@
 	}
 	
 	
+	isDecoder = ((isAutoencoder) && (!hasEncoder));
+	
 	function setupWindow()  {
 		document.getElementById("description").innerHTML = "Starting..";
 		fName = trainingFileName;
 		if (isAutoencoder)  numIOs = numOutputs;
 		else  numIOs = numInputs+numOutputs;
-		numSamples = trainingInputs.length;
+		if (!isDecoder)  numSamples = trainingInputs.length;
+		else  numSamples = trainingOutputs.length;
 		rowcol = rowcol_train;
 		initHeaders();
 		writeHeaders = (IOheaders.length > 0);
 		showInputs = !isAutoencoder;
 		tableNote = "";
 		updateChecks();
+		writeRes();
 		
-		if ((!isAutoencoder) || (hasEncoder))  NNinputs = trainingInputs;
+		if (isDecoder)  {
+			document.getElementById("centeredExpanderCaption").innerHTML = "Samples (x, y)";
+			document.getElementById("xLabel").innerHTML = "output";
+			document.getElementById("yLabel").innerHTML = "output";
+			document.getElementById("zLabel").innerHTML = "Feature";
+		}
+		else  document.getElementById("centeredExpanderCaption").innerHTML = "Inputs (x, y) &rarr; output (color)";
+		
+		if (!isDecoder)  NNinputs = trainingInputs;
 		else  {
+			NNoutputs = trainingOutputs;
 			NNinputs = new Array(numSamples);
 			for (var cs = 0; cs < numSamples; cs++)  {
 				NNinputs[cs] = new Array(layerSize[1]);
+				NNinputs[cs].fill(0);
 		}	}
+		if ((!isAutoencoder) || (isDecoder))  trueOutputs = trainingOutputs;
 		
 		setPrecision(document.getElementById("precision").value);
 		setCommaSpace(document.getElementById("numspaces").checked, true);
@@ -1123,8 +1153,11 @@
 		
 		if (variationalLayer < 2)  NNpredictor = new Function("ins", "outs", NNcode("JS", 16, false));
 		else  NNpredictor = new Function("ins", "var_ins", "outs", NNcode("JS", 16, false));
-		if ((!isAutoencoder) || (hasEncoder))  outputPrediction(true);
+		if (!isDecoder)  outputPrediction(true);
 		else  document.getElementById("description").innerHTML = "No encoding loaded";
+		
+		initAxes();
+		drawData();
 		
 		if (canCheckPrediction)  {
 			percentTrainingError = calcCost(trainingOutputs, outputCheck.length > 0, false);
@@ -1132,8 +1165,77 @@
 	}	}
 	
 	</script>
-
+	
+	<style>
+		div.leftButton {
+			float:left;
+			margin-left:0px;
+			text-align:center;
+			border-style:solid;
+			border-width:10px;
+			border-radius:4px;
+			border-color:rgb(220,220,220);
+			background-color:rgb(220,220,220);
+		}
+		div.rightButton {
+			float:right;
+			margin-right:30px;
+			text-align:center;
+			border-style:solid;
+			border-width:10px;
+			border-radius:4px;
+			border-color:rgb(208,221,224);
+			background-color:rgb(208,221,224)
+		}
+		div.centeredExpanderCaption {
+			float: left;
+			width: 300px;
+			text-align: center;
+			padding: 0 0 15px 0;
+		}
+		div.RHSexpanderButton {
+			margin-left: 290px;
+			cursor: pointer;
+		}
+		div.expander {
+			max-height: 0;
+			overflow: hidden;
+			transition: max-height 0.2s ease-out;
+		}
+		div.plotOptionsBox {
+			position: relative;
+			width: 310px;
+			line-height: 150%;
+		}
+		div.plotCol1 {
+			position: relative;
+			left: 10px;
+			top: 0.5em;
+			width: 135px;
+		}
+		div.plotCol2 {
+			position: absolute;
+			left: 155px;
+			top: 0px;
+			width: 155px;
+		}
+		div.plotCol2Inline {
+			position: absolute;
+			left: 155px;
+			top: 0.5em;
+			width: 155px;
+		}
+		div.thinLightBar {
+			width:250px;
+			height:1px;
+			margin-left:30px;
+			margin-top:10px;
+			margin-bottom:10px;
+			background-color:rgb(200,200,200);
+		}
+	</style>
 </head>
+
 <body style="user-select:none;-webkit-user-select:none" onload = setupWindow()>
 	
 	<div style="text-align:center;user-select:text;-webkit-user-select:text">
@@ -1141,49 +1243,93 @@
 	<h4>Generated ##D##</h4>
 	</div><br>
 	
-	<font size="+1"><u>Instructions</u>:  <strong>Save this window as an HTML file</strong>
-			or web archive for future use.  From here, you can:
-	
-	<ul><li>Process a new table of inputs using the neural network*;</li>
-	<li>Export the neural network as computer code for use in your own programs.</li></ul></font>
-	*##footnote##<br><br><br><br>
 	
 	
-	
-	<div style="width:550px;height:1px;margin:auto;background-color:rgb(67,67,67)"></div>
-	<div style="width:550px;height:3px;margin:auto;background-color:rgb(0,146,179)"></div>
-	<div style="width:550px;height:1px;margin:auto;background-color:rgb(67,67,67)"></div><br><br>
-	
-	<div style="position:relative;width:550px;height:100px;margin:auto">
-	
-	<div style="float:left;width:230px;height:100px;
-			text-align:center;background-color:rgb(220,220,220)">
-	<br><label for="upload">Process new samples</label><br><br>
-	<input type="file" id="uploadLink" name="uploadLink" style="display:none" onchange="doUpload(this)"></input>
-	<button type="button" id="upload" name="upload" onclick="startUpload()">##UBtext##</button>
-	</div>
-	
-	<div style="position:absolute;left:230px;width:90px;top:40px;text-align:center">OR</div>
-	
-	<div style="position:absolute;right:0px;top:0px;width:230px;height:100px;
-			text-align:center;background-color:rgb(208,221,224)">
-	<br><label for="language">Language: </label>
-	<select name="language" id="language">
-		<option value="C">C</option>
-		<option value="Java">Java</option>
-		<option value="JS">JavaScript</option>
-		<option value="MAT">MATLAB</option>
-		<option value="Py">Python</option>
-		<option value="R">R</option>
-	</select><br><br>
-	<button type="button" id="makecode" name="makeCode" onclick="outputCode()">Generate code</button>
-	</div>
-	
+	<div style="position:static;width:800px;margin:auto">
+		
+		<div style="width:800px;height:1px;margin:auto;background-color:rgb(67,67,67)"></div>
+		<div style="width:800px;height:3px;margin:auto;background-color:rgb(0,146,179)"></div>
+		<div style="width:800px;height:1px;margin:auto;background-color:rgb(67,67,67)"></div><br><br>
+		
+		<div style="width:750px;margin-left:25px;">
+			<div style="float:left;width:430px;height:302px;margin-left:10px;text-align:left">
+			<div style="position:relative;width:430px;height:302px">
+				
+				<div style="float:top;width:380px;height:200px;text-align:left">
+					<font size="+1"><u>Instructions</u>:  <strong>Save this window as an HTML file</strong>
+							or web archive for future use.  From here:
+					
+					<ul><li>Process a new table using the neural network##asterisk##;</li>
+					<li>Export the neural network as computer code.</li></ul></font>
+					##footnote##<br><br>
+				</div>
+				
+				<div style="position:absolute;bottom:0px;width:420px;height:80px">
+					<div class="leftButton">
+						<label for="upload">&thinsp;&ensp;Process new samples&ensp;&thinsp;</label><br><br>
+						<input type="file" id="uploadLink" name="uploadLink" style="display:none" onchange="doUpload(this)"></input>
+						<button type="button" id="upload" name="upload" onclick="startUpload()">##UBtext##</button>
+					</div>
+					
+					<div class="rightButton">
+						<label for="language">Language: </label>
+						<select name="language" id="language">
+							<option value="C">C</option>
+							<option value="Java">Java</option>
+							<option value="JS">JavaScript</option>
+							<option value="MAT">MATLAB</option>
+							<option value="Py">Python</option>
+							<option value="R">R</option>
+						</select><br><br>
+						<button type="button" id="makecode" name="makeCode" onclick="outputCode()">Generate code</button>
+					</div>
+				</div>
+			</div></div>
+			
+			<div style="width:310px;top:0px;margin-left:440px;margin-top:0px">
+				<p><canvas style="border:1px solid black;" id="plot" width="301" height="301"></canvas>
+				<div class="centeredExpanderCaption" id="centeredExpanderCaption"></div></p>
+				<div class="RHSexpanderButton" id="plotOptionsExpander">+</div><br>
+				<div class="expander" id="plotOptions">
+					<div class="plotOptionsBox">
+						<div class="plotCol1">x:&ensp;<span id="xLabel">input</span> #
+								<input type="text" id="xAxis" name="xAxis" size="4"></div>
+						<div class="plotCol2">min <input type="text" id="xAxisMin" name="xAxisMin" size="10"><br>
+								max <input type="text" id="xAxisMax" name="xAxisMax" size="10"></div><br>
+					</div>
+					<div class="plotOptionsBox">
+						<div class="plotCol1">y:&ensp;<span id="yLabel">input</span> #
+								<input type="text" id="yAxis" name="yAxis" size="4"></div>
+						<div class="plotCol2">min <input type="text" id="yAxisMin" name="yAxisMin" size="10"><br>
+								max <input type="text" id="yAxisMax" name="yAxisMax" size="10"></div><br>
+					</div>
+					<div class="plotOptionsBox">
+						<div class="plotCol1"><span id="zLabel">&rarr; output</span> #
+								<input type="text" id="zAxis" name="zAxis" size="4"></div>
+						<div class="plotCol2">min <input type="text" id="zAxisMin" name="zAxisMin" size="10"><br>
+								max <input type="text" id="zAxisMax" name="zAxisMax" size="10"></div><br>
+					</div>
+					<div class="thinLightBar"></div>
+					<div style="text-align:center">
+						Neural network overlay<br>
+					</div>
+					<div class="plotOptionsBox">
+						<div class="plotCol1" id="resolutionReadout"></div>
+						<div class="plotCol2Inline">
+							<input type="range" min="1" max="7" style="width:80px;vertical-align:bottom;" value="7" id="resolution">
+						</div>
+					</div><br>
+					<div class="plotOptionsBox">
+						<small>&emsp;*Note: all non-x/y NN inputs are set to 0</small>
+					</div><br>
+				</div>
+			</div>
+		</div>
+		
+		<div style="width:800px;height:1px;margin:auto;background-color:rgb(67,67,67)"></div>
+		<div style="width:800px;height:3px;margin:auto;background-color:rgb(0,146,179)"></div>
+		<div style="width:800px;height:1px;margin:auto;background-color:rgb(67,67,67)"></div><br><br>
 	</div><br><br>
-	
-	<div style="width:550px;height:1px;margin:auto;background-color:rgb(67,67,67)"></div>
-	<div style="width:550px;height:3px;margin:auto;background-color:rgb(0,146,179)"></div>
-	<div style="width:550px;height:1px;margin:auto;background-color:rgb(67,67,67)"></div><br><br><br><br>
 	
 	
 	<div style="position:relative;width:550px;border:6px solid #F6F6F6;background-color:#F8F8F8">
@@ -1218,6 +1364,223 @@
 	<div style="user-select:text;-webkit-user-select:text" id="output"></div>
 	</div>
 	
+
+	<script type="text/javascript">
+		
+		function togglePlotOptions() {
+			var optionBox = document.getElementById("plotOptions");
+			var optionButton = document.getElementById("plotOptionsExpander");
+			
+			if (optionBox.style.maxHeight)  {
+				optionBox.style.maxHeight = null;
+				optionButton.innerHTML = "+";		}
+			else  {
+				optionBox.style.maxHeight = optionBox.scrollHeight + "px";
+				optionButton.innerHTML = "&ndash;";		}
+		}
+		
+		function getInt(fieldName)  {  return parseInt(document.getElementById(fieldName).value);  }
+		function getFloat(fieldName)  {  return parseFloat(document.getElementById(fieldName).value);  }
+		
+		
+		function colorOf(clr)  {  return "rgb(" + String(clr[0]) + "," + String(clr[1]) + "," + String(clr[2]) + ")";  }
+		
+		function drawData()  {
+	
+			const p = document.getElementById("plot");
+			const c = p.getContext("2d");
+			var clr = clrf = [0,0,0];
+			const clrBack = [ 235, 235, 235 ];
+			const clr0 = [ [ 220, 220, 220 ], [ 200, 200, 200 ] ];
+			const clrPos = [ [ 255, 255, 0 ], [ 160, 0, 0 ] ];
+			const clrNeg = [ [ 0, 255, 255 ], [ 0, 0, 160 ] ];
+			const clrUnsup = [ [ 200, 100, 100 ], [ 200, 100, 100 ] ];
+			
+			c.fillStyle = colorOf(clrBack);
+			c.fillRect(0, 0, 301, 301);
+			
+			let xAxis = getInt("xAxis")-1;
+			let yAxis = getInt("yAxis")-1;
+			let xMin = getFloat("xAxisMin");
+			let xGridScale = getFloat("xAxisMax") - xMin;
+			let xScale = 300 / xGridScale;
+			let yMin = getFloat("yAxisMin");
+			let yGridScale = getFloat("yAxisMax") - yMin;
+			let yScale = 300 / yGridScale;
+			let zAxis = getInt("zAxis")-1;
+			let zMin = getFloat("zAxisMin");
+			let zScale = 2. / (getFloat("zAxisMax") - zMin);
+			let zGridScale = getFloat("zAxisMax") - zMin;
+			
+			var NNins = new Array(numInputs);
+			var NNouts = new Array(numOutputs);
+			NNins.fill(0.);
+			NNouts.fill(0.);
+			
+			var variationalZeros = [];
+			if (variationalLayer > 1)  {
+				variationalZeros = new Array(layerSize[variationalLayer]);
+				variationalZeros.fill(0);		}
+			
+			var x, y, z;
+			if (!isDecoder)  {
+				let NNres = (300 / imageRes()) + 1;
+				var NNpredictionMap = c.createImageData(NNres, NNres);
+				let idx = 0;
+				for (let cy = 0; cy < NNres; cy++)  {
+				for (let cx = 0; cx < NNres; cx++)  {
+					NNins[xAxis] = xGridScale*(cx/(NNres-1)) + xMin;
+					NNins[yAxis] = yGridScale*(cy/(NNres-1)) + yMin;
+					if (variationalLayer > 1)  NNpredictor(NNins, variationalZeros, NNouts);
+					else  NNpredictor(NNins, NNouts);
+					
+					z = 2 * (NNouts[zAxis]-zMin) / zGridScale - 1;
+					if (z < -1.)  z = -1.;
+					if (z > 1.)  z = 1.;
+					
+					if (z < 0.)  clrf = clrNeg[1];
+					else  clrf = clrPos[1];
+					for (let c3 = 0; c3 < 3; c3++)  {
+						NNpredictionMap.data[idx+c3] = clr0[1][c3] + Math.abs(z)*(clrf[c3]-clr0[1][c3]);
+					}
+					NNpredictionMap.data[idx+3] = 255;
+					idx += 4;
+				}}
+				c.putImageData(NNpredictionMap, 0, 0);
+				c.drawImage(c.canvas, 0, 0, NNres, NNres, 0, 0, 301, 301);
+			}
+			
+			var circleSource = NNinputs;
+			if (isDecoder)  circleSource = NNoutputs;
+			let circleSize = 40./Math.sqrt(numSamples);
+			if (circleSize < 2)  circleSize = 2;
+			for (let s = 0; s < numSamples; s++)  {
+				x = xScale * (circleSource[s][xAxis]-xMin);
+				y = yScale * (circleSource[s][yAxis]-yMin);
+				if (!isAutoencoder)  {
+					z = zScale * (trueOutputs[s][zAxis]-zMin) - 1.;
+					if (z < -1.)  z = -1.;
+					if (z > 1.)  z = 1.;
+				}
+				
+				c.beginPath();
+				c.arc(x, y, circleSize, 0, 2*Math.PI);
+				if (!isAutoencoder)  {
+					if (z < 0.)  clrf = clrNeg[0];
+					else  clrf = clrPos[0];
+					for (let c3 = 0; c3 < 3; c3++)  {
+						clr[c3] = clr0[0][c3] + Math.abs(z)*(clrf[c3]-clr0[0][c3]);
+				}	}
+				else  clr = clrUnsup[0];
+				c.fillStyle = colorOf(clr);
+				c.fill();
+				c.lineWidth = 0.5;
+				c.strokeStyle = "black";
+				c.stroke();
+			}
+			
+			if (isDecoder)  {
+				let zMax = getFloat("zAxisMax");
+				let dz = lineRes() * (zMax - zMin);
+				
+				c.beginPath();
+				for (z = zMin; z <= zMax; z += dz)  {
+					NNins[zAxis] = z;
+					if (variationalLayer > 1)  NNpredictor(NNins, variationalZeros, NNouts);
+					else  NNpredictor(NNins, NNouts);
+					
+					x = xScale * (NNouts[xAxis]-xMin);
+					y = yScale * (NNouts[yAxis]-yMin);
+					
+					if (z == -1.)  c.moveTo(x, y);
+					else  c.lineTo(x, y);
+				}
+				c.lineWidth = 2;
+				c.strokeStyle = "#222222";
+				c.stroke();
+			}
+		}
+		
+		
+		function setMinMax(masterArray, arrayIdx, minFieldName, maxFieldName, subtractR)  {
+			var minField = document.getElementById(minFieldName);
+			var maxField = document.getElementById(maxFieldName);
+			
+			if (masterArray.length == 0)  {
+				minField.value = -1;
+				maxField.value = 1;
+				return;
+			}
+			
+			let array = masterArray.map(function(oneSample) { return oneSample[arrayIdx]; });
+			
+			let minAxis = Math.min(...array);
+			let maxAxis = Math.max(...array);
+			
+			if (minAxis == maxAxis)  {
+				minField.value = -1;
+				maxField.value = 1;
+				return;
+			}
+			
+			if (subtractR)  {
+				let rCircle = (40/Math.sqrt(numSamples));
+				let dMaxMin = rCircle*(maxAxis-minAxis) / (301-2*rCircle);
+				minAxis -= dMaxMin;
+				maxAxis += dMaxMin;
+			}
+			
+			minField.value = minAxis.toPrecision(6);
+			maxField.value = maxAxis.toPrecision(6);
+		}
+		
+		
+		function initAxes()  {
+			document.getElementById("xAxis").value = "1";
+			document.getElementById("yAxis").value = "2";
+			document.getElementById("zAxis").value = "1";
+			initXaxis();
+			initYaxis();
+			initZaxis();
+		}
+		
+		function xyArray()  {  if (isDecoder)  return trueOutputs;  return NNinputs;  }
+		function zArray()  {  if (isDecoder)  return NNinputs;  return trueOutputs;  }
+		
+		function initXaxis()  {  setMinMax(xyArray(), getInt("xAxis")-1, "xAxisMin", "xAxisMax", true);  }
+		function initYaxis()  {  setMinMax(xyArray(), getInt("yAxis")-1, "yAxisMin", "yAxisMax", true);  }
+		function initZaxis()  {  setMinMax(zArray(), getInt("zAxis")-1, "zAxisMin", "zAxisMax", false);  }
+		function initXaxisAndPlot()  {  initXaxis(); drawData();  }
+		function initYaxisAndPlot()  {  initYaxis(); drawData();  }
+		function initZaxisAndPlot()  {  initZaxis(); drawData();  }
+		
+		resolution = document.getElementById("resolution");
+		
+		function imageRes()  {  vals = [1,2,3,4,5,6,10];  return vals[parseInt(resolution.value)-1];  }
+		function lineRes()  {  vals = [.00001,.0002,.0004,.0001,.0002,.0004,.001];  return vals[parseInt(resolution.value)-1];  }
+		
+		function writeRes()  {
+			var newstr = "Resolution: ";
+			if (!isDecoder)  newstr += String(imageRes()) + " px";
+			else  newstr += String(lineRes());
+			document.getElementById("resolutionReadout").innerHTML = newstr;
+		}
+		
+		document.getElementById("plotOptionsExpander").addEventListener("click", togglePlotOptions);
+		
+		document.getElementById("xAxis").addEventListener("change", initXaxisAndPlot);
+		document.getElementById("xAxisMin").addEventListener("change", drawData);
+		document.getElementById("xAxisMax").addEventListener("change", drawData);
+		document.getElementById("yAxis").addEventListener("change", initYaxisAndPlot);
+		document.getElementById("yAxisMin").addEventListener("change", drawData);
+		document.getElementById("yAxisMax").addEventListener("change", drawData);
+		document.getElementById("zAxis").addEventListener("change", initZaxisAndPlot);
+		document.getElementById("zAxisMin").addEventListener("change", drawData);
+		document.getElementById("zAxisMax").addEventListener("change", drawData);
+		resolution.addEventListener("input", writeRes);
+		resolution.addEventListener("change", drawData);
+	
+	</script>
 	
 </body>
 </html>
